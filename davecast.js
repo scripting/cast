@@ -1,4 +1,4 @@
-var myProductName = "davecast", myVersion = "0.4.4";  
+var myProductName = "davecast", myVersion = "0.4.7";  
 
 /*  The MIT License (MIT)
 	Copyright (c) 2014-2017 Dave Winer
@@ -30,6 +30,8 @@ const fs = require ("fs");
 exports.start = startup;
 exports.getTimeline = getTimelineFromServer;
 exports.getFeedlist = getListFromServer;
+exports.getIconForMessage = getIconForMessage;
+exports.simulateMessage = handleIncomingMessage;
 
 var mySocket = undefined;
 var feedlist = new Array ();
@@ -86,6 +88,7 @@ function downloadFeedlistIcons () {
 		var url = feedlist [ixfeedlist].urlIcon;
 		var ext = utils.stringLower (utils.stringLastField (url, "."));
 		var f = config.dataFolder + config.iconsFolder + utils.padWithZeros (ixfeedlist, 2) + "." + ext;
+		feedlist [ixfeedlist].f = f; //for later use
 		downloadBigFile (url, f);
 		}
 	for (var i = 0; i < feedlist.length; i++) {
@@ -104,8 +107,10 @@ function getListFromServer (callback) {
 			}
 		feedlist = jstruct;
 		saveFeedlist (); //only saves if enabled
+		if (callback !== undefined) {
+			callback (jstruct);
+			}
 		downloadFeedlistIcons ();
-		callback (jstruct);
 		});
 	}
 function getTimelineFromServer (callback) {
@@ -120,7 +125,9 @@ function getTimelineFromServer (callback) {
 			}
 		timeline = jstruct;
 		saveTimeline ();
-		callback (jstruct);
+		if (callback !== undefined) {
+			callback (jstruct);
+			}
 		});
 	}
 function consoleStatusMsg (s) {
@@ -191,24 +198,29 @@ function saveFeedlist (callback) {
 			}
 		}
 	}
-
+function getIconForMessage (jstruct) {
+	for (var i = 0; i < feedlist.length; i++) {
+		var item = feedlist [i];
+		if (item.urlFeed == jstruct.feedUrl) {
+			return (item.f);
+			}
+		}
+	return (undefined);
+	}
+function handleIncomingMessage (jstruct, callback) {
+	timeline.unshift (jstruct);
+	while (timeline.length > maxTimeline) {
+		timeline.pop ();
+		}
+	saveTimeline ();
+	saveMessage (jstruct);
+	if (callback !== undefined) {
+		callback (jstruct);
+		}
+	}
 
 function startup (userConfig, callback) {
 	var flEveryMinuteScheduled = false;
-	function docallback (jstruct) {
-		saveMessage (jstruct);
-		if (callback !== undefined) {
-			callback (jstruct);
-			}
-		}
-	function handleIncomingMessage (jstruct) {
-		timeline.unshift (jstruct);
-		while (timeline.length > maxTimeline) {
-			timeline.pop ();
-			}
-		saveTimeline ();
-		docallback (jstruct);
-		}
 	function startWebSocketClient (s) {
 		mySocket = websocket.connect (config.urlWebsocketsServer); 
 		mySocket.on ("connect", function () {
@@ -232,12 +244,7 @@ function startup (userConfig, callback) {
 						case "item":
 							var jsontext = utils.stringDelete (eventData, 1, 5); //pop off "item "
 							var jstruct = JSON.parse (jsontext);
-							timeline.unshift (jstruct);
-							while (timeline.length > maxTimeline) {
-								timeline.pop ();
-								}
-							saveTimeline ();
-							docallback (jstruct);
+							handleIncomingMessage (jstruct, callback);
 							break;
 						default:
 							break;
@@ -277,26 +284,6 @@ function startup (userConfig, callback) {
 	
 	getListFromServer (function () {
 		getTimelineFromServer (function () {
-			//testing code -- comment this out -- we handle a fixed message on startup so we don't have to post test messages to get a test
-				var testMessage = {
-					"title": "",
-					"link": "http://scripting.com/2017/07/21.html#a101841",
-					"description": "Crazy podcasting moments? A magazine is doing a profile of me re the beginnings of podcasting at Berkman in 2003. They asked for stories of goofs, or the first time something weird happened on a podcast. If you were listening back at the beginning, the podcasts from the DNC in ...",
-					"permalink": "http://scripting.com/2017/07/21.html#a101841",
-					"outline": {
-						"text": "<b>Crazy podcasting moments? </b>A magazine is doing a profile of me re the beginnings of podcasting at Berkman in 2003. They asked for stories of goofs, or the first time something weird happened on a podcast. If you were listening back at the beginning, the podcasts from the DNC in 2003, or a BloggerCon, or one of the casts from my cross-country driving in 2004, please leave a note <a href=\"https://github.com/scripting/Scripting-News/issues/17\">here</a>.",
-						"created": "Fri, 21 Jul 2017 14:18:41 GMT",
-						"type": "outline",
-						"permalink": "http://scripting.com/2017/07/21.html#a101841"
-					},
-					"pubdate": "2017-07-21T14:18:41.000Z",
-					"comments": "",
-					"feedUrl": "http://scripting.com/rss.xml",
-					"when": "2017-07-21T14:27:38.307Z",
-					"aggregator": "River5 v0.5.15",
-					"id": 1495
-					};
-				handleIncomingMessage (testMessage);
 			setInterval (everySecond, 1000); 
 			});
 		});
