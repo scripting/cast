@@ -1,4 +1,4 @@
-var myProductName = "davecast", myVersion = "0.4.2";  
+var myProductName = "davecast", myVersion = "0.4.3";  
 
 /*  The MIT License (MIT)
 	Copyright (c) 2014-2017 Dave Winer
