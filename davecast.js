@@ -1,4 +1,4 @@
-var myProductName = "davecast", myVersion = "0.4.3";  
+var myProductName = "davecast", myVersion = "0.4.4";  
 
 /*  The MIT License (MIT)
 	Copyright (c) 2014-2017 Dave Winer
@@ -39,12 +39,13 @@ var timeline = new Array ();
 var config = {
 	urlHttpServer: "http://davecast.org/",
 	urlWebsocketsServer: "ws://davecast.org:5381/",
-	flSaveMessages: true,
-	messagesFolder: "data/messages/",
-	flSaveTimeline: true,
-	timelinePath: "data/timeline.json",
-	flSaveFeedlist: true,
-	feedlistPath: "data/feedlist.json"
+	
+	flSaveData: true, //if true we keep the timeline, feedlist and each message in a folder. 
+	dataFolder: "data/",
+	messagesFolder: "messages/",
+	iconsFolder: "icons/",
+	fnameTimeline: "timeline.json",
+	fnameFeedlist: "feedlist.json",
 	};
 
 function httpReadUrl (url, callback) {
@@ -57,6 +58,40 @@ function httpReadUrl (url, callback) {
 			}
 		});
 	}
+function downloadBigFile (url, f, pubDate, callback) { //4/17/17 by DW
+	utils.sureFilePath (f, function () {
+		var theStream = fs.createWriteStream (f);
+		theStream.on ("finish", function () {
+			if (pubDate === undefined) {
+				pubDate = new Date ();
+				}
+			else {
+				pubDate = new Date (pubDate);
+				}
+			fs.utimes (f, pubDate, pubDate, function () {
+				});
+			if (callback !== undefined) {
+				callback ();
+				}
+			});
+		request.get (url)
+			.on ('error', function (err) {
+				console.log (err);
+				})
+			.pipe (theStream);
+		});
+	}
+function downloadFeedlistIcons () {
+	function downloadOne (ixfeedlist) {
+		var url = feedlist [ixfeedlist].urlIcon;
+		var ext = utils.stringLower (utils.stringLastField (url, "."));
+		var f = config.dataFolder + config.iconsFolder + utils.padWithZeros (ixfeedlist, 2) + "." + ext;
+		downloadBigFile (url, f);
+		}
+	for (var i = 0; i < feedlist.length; i++) {
+		downloadOne (i);
+		}
+	}
 function getListFromServer (callback) {
 	var apiUrl = config.urlHttpServer + "davecast/feeds";
 	httpReadUrl (apiUrl, function (jsontext) {
@@ -67,6 +102,9 @@ function getListFromServer (callback) {
 		catch (err) {
 			console.log ("getListFromServer: err.message == " + err.message);
 			}
+		feedlist = jstruct;
+		saveFeedlist (); //only saves if enabled
+		downloadFeedlistIcons ();
 		callback (jstruct);
 		});
 	}
@@ -80,6 +118,8 @@ function getTimelineFromServer (callback) {
 		catch (err) {
 			console.log ("getTimelineFromServer: err.message == " + err.message);
 			}
+		timeline = jstruct;
+		saveTimeline ();
 		callback (jstruct);
 		});
 	}
@@ -91,8 +131,9 @@ function consoleStatusMsg (s) {
 	console.log (theMessage + ".");
 	}
 function saveMessage (jstruct, callback) { 
-	if (config.flSaveMessages) {
-		var f = config.messagesFolder + utils.getDatePath (jstruct.when) + jstruct.id + ".json", jsontext = utils.jsonStringify (jstruct);
+	if (config.flSaveData) {
+		var f = config.dataFolder + config.messagesFolder + utils.getDatePath (jstruct.when) + jstruct.id + ".json";
+		var jsontext = utils.jsonStringify (jstruct);
 		utils.sureFilePath (f, function () {
 			fs.writeFile (f, jsontext, function (err) {
 				if (err) {
@@ -111,9 +152,10 @@ function saveMessage (jstruct, callback) {
 		}
 	}
 function saveTimeline (callback) { 
-	if (config.flSaveTimeline) {
-		utils.sureFilePath (config.timelinePath, function () {
-			fs.writeFile (config.timelinePath, utils.jsonStringify (timeline), function (err) {
+	if (config.flSaveData) {
+		var f = config.dataFolder + config.fnameTimeline;
+		utils.sureFilePath (f, function () {
+			fs.writeFile (f, utils.jsonStringify (timeline), function (err) {
 				if (err) {
 					console.log ("saveTimeline: err.message == " + err.message);
 					}
@@ -130,9 +172,10 @@ function saveTimeline (callback) {
 		}
 	}
 function saveFeedlist (callback) { 
-	if (config.flSaveFeedlist) {
-		utils.sureFilePath (config.feedlistPath, function () {
-			fs.writeFile (config.feedlistPath, utils.jsonStringify (feedlist), function (err) {
+	if (config.flSaveData) {
+		var f = config.dataFolder + config.fnameFeedlist;
+		utils.sureFilePath (f, function () {
+			fs.writeFile (f, utils.jsonStringify (feedlist), function (err) {
 				if (err) {
 					console.log ("saveFeedlist: err.message == " + err.message);
 					}
@@ -149,6 +192,7 @@ function saveFeedlist (callback) {
 		}
 	}
 
+
 function startup (userConfig, callback) {
 	var flEveryMinuteScheduled = false;
 	function docallback (jstruct) {
@@ -156,6 +200,14 @@ function startup (userConfig, callback) {
 		if (callback !== undefined) {
 			callback (jstruct);
 			}
+		}
+	function handleIncomingMessage (jstruct) {
+		timeline.unshift (jstruct);
+		while (timeline.length > maxTimeline) {
+			timeline.pop ();
+			}
+		saveTimeline ();
+		docallback (jstruct);
 		}
 	function startWebSocketClient (s) {
 		mySocket = websocket.connect (config.urlWebsocketsServer); 
@@ -166,16 +218,12 @@ function startup (userConfig, callback) {
 		mySocket.on ("text", function (eventData) {
 			if (eventData !== undefined) { //no error
 				var words = eventData.split (" ");
-				console.log ("startWebSocketClient: received message == " + eventData);
 				if (words.length >= 2) { 
 					switch (words [0]) {
 						case "updated":
 							var listname = utils.trimWhitespace (words [1]);
 							if (listname == "feeds.json") {
-								getListFromServer (function (theList) {
-									feedlist = theList;
-									saveFeedlist ();
-									});
+								getListFromServer ();
 								}
 							break;
 						case "readfeed":
@@ -192,7 +240,6 @@ function startup (userConfig, callback) {
 							docallback (jstruct);
 							break;
 						default:
-							console.log (words [0] + words [1]);
 							break;
 						}
 					}
@@ -228,10 +275,28 @@ function startup (userConfig, callback) {
 			
 		}
 	
-	getListFromServer (function (theList) {
-		feedlist = theList; saveFeedlist ();
-		getTimelineFromServer (function (theTimeline) {
-			timeline = theTimeline; saveTimeline ();
+	getListFromServer (function () {
+		getTimelineFromServer (function () {
+			//testing code -- comment this out -- we handle a fixed message on startup so we don't have to post test messages to get a test
+				var testMessage = {
+					"title": "",
+					"link": "http://scripting.com/2017/07/21.html#a101841",
+					"description": "Crazy podcasting moments? A magazine is doing a profile of me re the beginnings of podcasting at Berkman in 2003. They asked for stories of goofs, or the first time something weird happened on a podcast. If you were listening back at the beginning, the podcasts from the DNC in ...",
+					"permalink": "http://scripting.com/2017/07/21.html#a101841",
+					"outline": {
+						"text": "<b>Crazy podcasting moments? </b>A magazine is doing a profile of me re the beginnings of podcasting at Berkman in 2003. They asked for stories of goofs, or the first time something weird happened on a podcast. If you were listening back at the beginning, the podcasts from the DNC in 2003, or a BloggerCon, or one of the casts from my cross-country driving in 2004, please leave a note <a href=\"https://github.com/scripting/Scripting-News/issues/17\">here</a>.",
+						"created": "Fri, 21 Jul 2017 14:18:41 GMT",
+						"type": "outline",
+						"permalink": "http://scripting.com/2017/07/21.html#a101841"
+					},
+					"pubdate": "2017-07-21T14:18:41.000Z",
+					"comments": "",
+					"feedUrl": "http://scripting.com/rss.xml",
+					"when": "2017-07-21T14:27:38.307Z",
+					"aggregator": "River5 v0.5.15",
+					"id": 1495
+					};
+				handleIncomingMessage (testMessage);
 			setInterval (everySecond, 1000); 
 			});
 		});
