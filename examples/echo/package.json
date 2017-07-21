@@ -1,0 +1,13 @@
+{
+	"name": "test",
+	"description": "Barebones test case for the davecast package.",
+	"author": "Dave Winer <dave@smallpicture.com>",
+	"version": "0.4.0",
+	"dependencies" : {
+		"davecast": "*"
+		}, 
+	"license": "MIT",
+	"engines": {
+		"node": "*"
+		}
+	}

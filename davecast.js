@@ -1,4 +1,4 @@
-var myProductName = "davecast", myVersion = "0.4.0";  
+var myProductName = "davecast", myVersion = "0.4.1";  
 
 /*  The MIT License (MIT)
 	Copyright (c) 2014-2017 Dave Winer
@@ -37,8 +37,8 @@ const maxTimeline = 100;
 var timeline = new Array ();
 
 var config = {
-	urlDavecastServer: "http://davecast.org/",
-	urlMySocket: "ws://davecast.org:5381/",
+	urlHttpServer: "http://davecast.org/",
+	urlWebsocketsServer: "ws://davecast.org:5381/",
 	flSaveMessages: true,
 	messagesFolder: "data/messages/",
 	flSaveTimeline: true,
@@ -58,7 +58,7 @@ function httpReadUrl (url, callback) {
 		});
 	}
 function getListFromServer (callback) {
-	var apiUrl = config.urlDavecastServer + "davecast/feeds";
+	var apiUrl = config.urlHttpServer + "davecast/feeds";
 	httpReadUrl (apiUrl, function (jsontext) {
 		var jstruct = undefined;
 		try {
@@ -71,7 +71,7 @@ function getListFromServer (callback) {
 		});
 	}
 function getTimelineFromServer (callback) {
-	var apiUrl = config.urlDavecastServer + "davecast/timeline";
+	var apiUrl = config.urlHttpServer + "davecast/timeline";
 	httpReadUrl (apiUrl, function (jsontext) {
 		var jstruct = undefined;
 		try {
@@ -158,9 +158,9 @@ function startup (userConfig, callback) {
 			}
 		}
 	function startWebSocketClient (s) {
-		mySocket = websocket.connect (config.urlMySocket); 
+		mySocket = websocket.connect (config.urlWebsocketsServer); 
 		mySocket.on ("connect", function () {
-			consoleStatusMsg ("connection opened with " + config.urlMySocket);
+			consoleStatusMsg ("connection opened with " + config.urlWebsocketsServer);
 			mySocket.send (s);
 			});
 		mySocket.on ("text", function (eventData) {
@@ -171,11 +171,15 @@ function startup (userConfig, callback) {
 					switch (words [0]) {
 						case "updated":
 							var listname = utils.trimWhitespace (words [1]);
-							console.log ("updated " + listname);
+							if (listname == "feeds.json") {
+								getListFromServer (function (theList) {
+									feedlist = theList;
+									saveFeedlist ();
+									});
+								}
 							break;
 						case "readfeed":
 							var urlfeed = utils.trimWhitespace (words [1]);
-							console.log ("readfeed " + urlfeed);
 							break;
 						case "item":
 							var jsontext = utils.stringDelete (eventData, 1, 5); //pop off "item "
@@ -217,10 +221,12 @@ function startup (userConfig, callback) {
 			}
 		}
 	
-	for (x in userConfig) {
-		config [x] = userConfig [x];
+	if (userConfig !== undefined) {
+		for (x in userConfig) {
+			config [x] = userConfig [x];
+			}
+			
 		}
-		
 	
 	getListFromServer (function (theList) {
 		feedlist = theList; saveFeedlist ();
