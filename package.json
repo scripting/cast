@@ -3,7 +3,7 @@
 	"description": "Glue that connects JavaScript apps to the davecast server.",
 	"author": "Dave Winer <dave@smallpicture.com>",
 	"license": "MIT",
-	"version": "0.4.1",
+	"version": "0.4.2",
 	"main": "davecast.js",
 	"repository": {
 		"type": "git",
