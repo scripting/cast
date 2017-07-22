@@ -1,4 +1,4 @@
-var myProductName = "davecast", myVersion = "0.4.7";  
+var myProductName = "davecast", myVersion = "0.4.8";  
 
 /*  The MIT License (MIT)
 	Copyright (c) 2014-2017 Dave Winer
@@ -31,6 +31,9 @@ exports.start = startup;
 exports.getTimeline = getTimelineFromServer;
 exports.getFeedlist = getListFromServer;
 exports.getIconForMessage = getIconForMessage;
+exports.getConfig = function () {
+	return (config);
+	}
 exports.simulateMessage = handleIncomingMessage;
 
 var mySocket = undefined;
@@ -42,12 +45,14 @@ var config = {
 	urlHttpServer: "http://davecast.org/",
 	urlWebsocketsServer: "ws://davecast.org:5381/",
 	
-	flSaveData: true, //if true we keep the timeline, feedlist and each message in a folder. 
+	flSaveData: true, //if true we keep the timeline, feedlist and each message in the data folder. 
 	dataFolder: "data/",
 	messagesFolder: "messages/",
 	iconsFolder: "icons/",
 	fnameTimeline: "timeline.json",
 	fnameFeedlist: "feedlist.json",
+	
+	incomingMessageCallback: undefined
 	};
 
 function httpReadUrl (url, callback) {
@@ -207,20 +212,21 @@ function getIconForMessage (jstruct) {
 		}
 	return (undefined);
 	}
-function handleIncomingMessage (jstruct, callback) {
+function handleIncomingMessage (jstruct) {
 	timeline.unshift (jstruct);
 	while (timeline.length > maxTimeline) {
 		timeline.pop ();
 		}
 	saveTimeline ();
 	saveMessage (jstruct);
-	if (callback !== undefined) {
-		callback (jstruct);
+	if (config.incomingMessageCallback !== undefined) {
+		config.incomingMessageCallback (jstruct);
 		}
 	}
 
 function startup (userConfig, callback) {
 	var flEveryMinuteScheduled = false;
+	
 	function startWebSocketClient (s) {
 		mySocket = websocket.connect (config.urlWebsocketsServer); 
 		mySocket.on ("connect", function () {
@@ -244,7 +250,7 @@ function startup (userConfig, callback) {
 						case "item":
 							var jsontext = utils.stringDelete (eventData, 1, 5); //pop off "item "
 							var jstruct = JSON.parse (jsontext);
-							handleIncomingMessage (jstruct, callback);
+							handleIncomingMessage (jstruct);
 							break;
 						default:
 							break;
@@ -285,6 +291,9 @@ function startup (userConfig, callback) {
 	getListFromServer (function () {
 		getTimelineFromServer (function () {
 			setInterval (everySecond, 1000); 
+			if (callback !== undefined) { //initialiation is complete
+				callback ();
+				}
 			});
 		});
 	}
