@@ -1,4 +1,4 @@
-var myProductName = "davecast", myVersion = "0.4.8";  
+var myProductName = "davecast", myVersion = "0.4.9";  
 
 /*  The MIT License (MIT)
 	Copyright (c) 2014-2017 Dave Winer
@@ -28,9 +28,13 @@ const request = require ("request");
 const fs = require ("fs");
 
 exports.start = startup;
-exports.getTimeline = getTimelineFromServer;
-exports.getFeedlist = getListFromServer;
 exports.getIconForMessage = getIconForMessage;
+exports.getTimeline = function () {
+	return (timeline);
+	};
+exports.getFeedlist = function () {
+	return (feedlist); 
+	}
 exports.getConfig = function () {
 	return (config);
 	}
