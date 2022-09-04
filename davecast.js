@@ -1,4 +1,4 @@
-var myProductName = "davecast", myVersion = "0.4.9";  
+var myProductName = "davecast", myVersion = "0.4.10";  
 
 /*  The MIT License (MIT)
 	Copyright (c) 2014-2017 Dave Winer
@@ -93,15 +93,17 @@ function downloadBigFile (url, f, pubDate, callback) { //4/17/17 by DW
 		});
 	}
 function downloadFeedlistIcons () {
-	function downloadOne (ixfeedlist) {
-		var url = feedlist [ixfeedlist].urlIcon;
-		var ext = utils.stringLower (utils.stringLastField (url, "."));
-		var f = config.dataFolder + config.iconsFolder + utils.padWithZeros (ixfeedlist, 2) + "." + ext;
-		feedlist [ixfeedlist].f = f; //for later use
-		downloadBigFile (url, f);
-		}
-	for (var i = 0; i < feedlist.length; i++) {
-		downloadOne (i);
+	if (feedlist !== undefined) {
+		function downloadOne (ixfeedlist) {
+			var url = feedlist [ixfeedlist].urlIcon;
+			var ext = utils.stringLower (utils.stringLastField (url, "."));
+			var f = config.dataFolder + config.iconsFolder + utils.padWithZeros (ixfeedlist, 2) + "." + ext;
+			feedlist [ixfeedlist].f = f; //for later use
+			downloadBigFile (url, f);
+			}
+		for (var i = 0; i < feedlist.length; i++) {
+			downloadOne (i);
+			}
 		}
 	}
 function getListFromServer (callback) {
